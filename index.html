@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Aplikasi Pengawasan Kemetrologian</title>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- Icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+
+<style>
+:root{--yellow:#f1c40f;--dark:#222;--muted:#f6f7f9}
+body{margin:0;font-family:Inter,Arial,Helvetica,sans-serif;background:var(--muted);color:#111}
+header{background:var(--yellow);padding:12px;display:flex;align-items:center;gap:10px;justify-content:center;font-weight:700}
+header img{height:38px;border-radius:6px}
+.container{padding:14px;padding-bottom:96px}
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:#fff;padding:18px;border-radius:12px;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,0.06);cursor:pointer}
+.card i{font-size:26px;color:var(--dark);margin-bottom:6px;display:block}
+h3{margin:8px 0 12px;font-size:18px}
+.page{display:none}
+.page.active{display:block}
+form{background:#fff;padding:12px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.04)}
+label{display:block;margin-top:8px;font-weight:600;font-size:13px}
+input[type=text],input[type=date],input[type=number],select,textarea{width:100%;padding:8px;margin-top:6px;border-radius:8px;border:1px solid #dcdcdc;box-sizing:border-box;font-size:14px}
+textarea{min-height:80px;resize:vertical}
+.petugas label{font-weight:400;display:block;margin-top:6px}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.thumbs img{width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #ddd}
+.sig-wrap{margin-top:8px}
+canvas.signature{width:100%;height:140px;border:1px solid #ccc;border-radius:6px;background:#fff;touch-action:none}
+.btn{display:inline-block;padding:10px 12px;border-radius:8px;border:none;background:var(--yellow);font-weight:700;cursor:pointer}
+.btn.secondary{background:#6c757d;color:#fff}
+.btn.small{padding:8px 10px;font-size:13px}
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;background:var(--yellow);display:flex;justify-content:space-around;padding:8px 0;border-top:1px solid rgba(0,0,0,0.06);z-index:999}
+.bottom-nav button{background:none;border:none;flex:1;text-align:center;padding:4px;font-weight:700;cursor:pointer}
+.bottom-nav i{display:block;font-size:18px;margin-bottom:4px}
+#mapid{width:100%;height:56vh;border-radius:12px}
+.chart-wrap{background:#fff;padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,0.04)}
+.overlay{position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1200}
+.overlay .box{width:92%;max-width:420px;background:#fff;padding:12px;border-radius:8px}
+@media(min-width:720px){ .menu-grid{grid-template-columns:repeat(4,1fr)} }
+</style>
+</head>
+<body>
+
+<header>
+  <!-- logo yang kamu upload: aku isi dengan host i.ibb.co link sebelumnya -->
+  <img src="https://i.ibb.co/t3yzwV0/metrologi.png" alt="logo">
+  Aplikasi Pengawasan Kemetrologian
+</header>
+
+<div class="container">
+  <!-- HOME -->
+  <div id="home" class="page active">
+    <div class="menu-grid">
+      <div class="card" onclick="openMenu('laporan')"><i class="fa-solid fa-file-lines"></i><strong>Laporan Kegiatan<br>Pengawasan</strong><small style="display:block;margin-top:6px;color:#555">UTTP / BDKT / Potensi</small></div>
+      <div class="card" onclick="openMenu('cerapan')"><i class="fa-solid fa-vials"></i><strong>Cerapan Pengujian<br>Kebenaran</strong><small style="display:block;margin-top:6px;color:#555">Pompa / Timbangan / BDKT</small></div>
+      <div class="card" onclick="openMenu('map')"><i class="fa-solid fa-map-location-dot"></i><strong>Map Pengawasan<br>BDKT</strong><small style="display:block;margin-top:6px;color:#555">Leaflet + OSM</small></div>
+      <div class="card" onclick="openMenu('grafik')"><i class="fa-solid fa-chart-column"></i><strong>Grafik Laporan<br>Pengawasan</strong><small style="display:block;margin-top:6px;color:#555">UTTP & BDKT</small></div>
+    </div>
+  </div>
+
+  <!-- LAPORAN MENU -->
+  <div id="laporan" class="page">
+    <h3>Laporan Kegiatan Pengawasan</h3>
+    <div class="menu-grid">
+      <div class="card" onclick="openForm('uttp')"><i class="fa-solid fa-scale-balanced"></i><strong>Pengawasan UTTP</strong></div>
+      <div class="card" onclick="openForm('bdkt')"><i class="fa-solid fa-box-open"></i><strong>Pengawasan BDKT</strong></div>
+      <div class="card" onclick="openForm('potensi')"><i class="fa-solid fa-list"></i><strong>Pendataan Potensi UTTP</strong></div>
+    </div>
+    <div style="margin-top:12px"><button class="btn secondary" onclick="goHome()">⬅ Kembali</button></div>
+  </div>
+
+  <!-- FORM UTTP (lengkap sesuai permintaan) -->
+  <div id="form-uttp" class="page">
+    <h3>Laporan Pengawasan UTTP</h3>
+    <form id="uttpForm">
+      <label>Tanggal Pengawasan</label>
+      <input type="date" name="tanggal" required>
+
+      <label>Nama Perusahaan</label>
+      <input type="text" name="namaPerusahaan" placeholder="Nama Perusahaan" required>
+
+      <label>Alamat Perusahaan</label>
+      <input type="text" name="alamatPerusahaan" placeholder="Alamat Perusahaan">
+
+      <label>Kecamatan</label>
+      <select name="kecamatan" required>
+        <option value="">-- Pilih Kecamatan (Semarang) --</option>
+        <option>Banyumanik</option><option>Candisari</option><option>Gajahmungkur</option><option>Gayamsari</option>
+        <option>Genuk</option><option>Gunungpati</option><option>Mijen</option><option>Ngaliyan</option>
+        <option>Pedurungan</option><option>Semarang Barat</option><option>Semarang Selatan</option><option>Semarang Tengah</option>
+        <option>Semarang Timur</option><option>Semarang Utara</option><option>Tembalang</option><option>Tugu</option>
+      </select>
+
+      <label>Petugas (centang)</label>
+      <div class="petugas">
+        <label><input type="checkbox" name="petugas" value="Mohamad Iqbal, S.H., M.H."> Mohamad Iqbal, S.H., M.H.</label>
+        <label><input type="checkbox" name="petugas" value="Annis Isnaeni, S.T."> Annis Isnaeni, S.T.</label>
+        <label><input type="checkbox" name="petugas" value="Eka Astutiyanti, S.T."> Eka Astutiyanti, S.T.</label>
+        <label><input type="checkbox" name="petugas" value="Rendra Prasetya P, A.Md"> Rendra Prasetya P, A.Md</label>
+        <label><input type="checkbox" name="petugas" value="Al Ade Bagus, A.Md"> Al Ade Bagus, A.Md</label>
+      </div>
+
+      <label>Jenis UTTP</label><input type="text" name="jenisUTTP" placeholder="Jenis UTTP">
+      <label>Merk / Tipe / No. Seri</label><input type="text" name="merkTipe" placeholder="Merk / Tipe / No. Seri">
+      <label>Kapasitas</label><input type="text" name="kapasitas" placeholder="Kapasitas">
+      <label>Alat Perlengkapan</label><input type="text" name="alatPerlengkapan" placeholder="Alat Perlengkapan">
+      <label>Jumlah Alat Perlengkapan</label><input type="number" name="jumlahAlat" min="0" placeholder="Jumlah">
+      <label>CTT Terakhir</label><input type="text" name="cttTerakhir" placeholder="CTT Terakhir">
+
+      <label>Hasil Pengawasan</label>
+      <select name="hasilPengawasan">
+        <option value="Melanggar">Melanggar</option>
+        <option value="Tidak Melanggar">Tidak Melanggar</option>
+      </select>
+
+      <label>Keterangan</label><textarea name="keterangan" placeholder="Keterangan"></textarea>
+
+      <label>Upload Foto (opsional)</label>
+      <input type="file" name="photos" accept="image/*" multiple>
+      <div class="thumbs" id="thumbs-uttp"></div>
+
+      <label>Gunakan lokasi saat ini (opsional)</label>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn small" onclick="useMyLocation('uttp')">📍 Gunakan Lokasi</button>
+        <input type="text" name="latlng" placeholder="Koordinat (lat,lng)" readonly style="flex:1" />
+      </div>
+
+      <label>Tanda Tangan Perusahaan (opsional)</label>
+      <div class="sig-wrap">
+        <canvas id="sig-uttp" class="signature"></canvas>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button type="button" class="btn small" onclick="clearSig('sig-uttp')">Hapus TTD</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn" type="submit">Kirim & Simpan</button>
+        <button class="btn secondary" type="button" onclick="showList('uttp')">Lihat Daftar</button>
+        <button class="btn secondary" type="button" onclick="goHome()">Batal</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- FORM BDKT (lengkap) -->
+  <div id="form-bdkt" class="page">
+    <h3>Laporan Pengawasan BDKT</h3>
+    <form id="bdktForm">
+      <label>Tanggal Pengawasan</label><input type="date" name="tanggal" required>
+      <label>Nama Perusahaan</label><input type="text" name="namaPerusahaan" required>
+      <label>Alamat Perusahaan</label><input type="text" name="alamatPerusahaan">
+      <label>Kecamatan</label>
+      <select name="kecamatan" required>
+        <option value="">-- Pilih Kecamatan (Semarang) --</option>
+        <option>Banyumanik</option><option>Candisari</option><option>Gajahmungkur</option><option>Gayamsari</option>
+        <option>Genuk</option><option>Gunungpati</option><option>Mijen</option><option>Ngaliyan</option>
+        <option>Pedurungan</option><option>Semarang Barat</option><option>Semarang Selatan</option><option>Semarang Tengah</option>
+        <option>Semarang Timur</option><option>Semarang Utara</option><option>Tembalang</option><option>Tugu</option>
+      </select>
+
+      <label>Petugas (centang)</label>
+      <div class="petugas">
+        <label><input type="checkbox" name="petugas" value="Mohamad Iqbal, S.H., M.H."> Mohamad Iqbal, S.H., M.H.</label>
+        <label><input type="checkbox" name="petugas" value="Annis Isnaeni, S.T."> Annis Isnaeni, S.T.</label>
+        <label><input type="checkbox" name="petugas" value="Eka Astutiyanti, S.T."> Eka Astutiyanti, S.T.</label>
+        <label><input type="checkbox" name="petugas" value="Rendra Prasetya P, A.Md"> Rendra Prasetya P, A.Md</label>
+        <label><input type="checkbox" name="petugas" value="Al Ade Bagus, A.Md"> Al Ade Bagus, A.Md</label>
+      </div>
+
+      <label>Jenis BDKT</label><input type="text" name="jenisBDKT">
+      <label>Merk Produk</label><input type="text" name="merkProduk">
+      <label>Jumlah Sampel</label><input type="number" name="jumlahSampel" min="0">
+      <label>Netto</label><input type="text" name="netto">
+      <label>Tarra</label><input type="text" name="tarra">
+      <label>Satuan Ukuran</label><input type="text" name="satuanUkuran">
+
+      <label>Hasil Pengawasan Kebenaran</label>
+      <select name="hasilKebenaran"><option value="Melanggar">Melanggar</option><option value="Tidak Melanggar">Tidak Melanggar</option></select>
+
+      <label>Hasil Pengawasan Satuan Ukuran</label>
+      <select name="hasilSatuan"><option value="Melanggar">Melanggar</option><option value="Tidak Melanggar">Tidak Melanggar</option></select>
+
+      <label>Keterangan</label><textarea name="keterangan"></textarea>
+
+      <label>Upload Foto (opsional)</label>
+      <input type="file" name="photos" accept="image/*" multiple>
+      <div class="thumbs" id="thumbs-bdkt"></div>
+
+      <label>Gunakan lokasi saat ini (opsional)</label>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn small" onclick="useMyLocation('bdkt')">📍 Gunakan Lokasi</button>
+        <input type="text" name="latlng" placeholder="Koordinat (lat,lng)" readonly style="flex:1" />
+      </div>
+
+      <label>Tanda Tangan Perusahaan (opsional)</label>
+      <div class="sig-wrap">
+        <canvas id="sig-bdkt" class="signature"></canvas>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button type="button" class="btn small" onclick="clearSig('sig-bdkt')">Hapus TTD</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn" type="submit">Kirim & Simpan</button>
+        <button class="btn secondary" type="button" onclick="showList('bdkt')">Lihat Daftar</button>
+        <button class="btn secondary" type="button" onclick="goHome()">Batal</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- FORM POTENSI (lengkap) -->
+  <div id="form-potensi" class="page">
+    <h3>Pendataan Potensi UTTP</h3>
+    <form id="potensiForm">
+      <label>Tanggal Pengawasan</label><input type="date" name="tanggal" required>
+      <label>Nama Perusahaan</label><input type="text" name="namaPerusahaan" required>
+      <label>Alamat Perusahaan</label><input type="text" name="alamatPerusahaan">
+      <label>Kecamatan</label>
+      <select name="kecamatan" required>
+        <option value="">-- Pilih Kecamatan (Semarang) --</option>
+        <option>Banyumanik</option><option>Candisari</option><option>Gajahmungkur</option><option>Gayamsari</option>
+        <option>Genuk</option><option>Gunungpati</option><option>Mijen</option><option>Ngaliyan</option>
+        <option>Pedurungan</option><option>Semarang Barat</option><option>Semarang Selatan</option><option>Semarang Tengah</option>
+        <option>Semarang Timur</option><option>Semarang Utara</option><option>Tembalang</option><option>Tugu</option>
+      </select>
+
+      <label>Petugas (centang)</label>
+      <div class="petugas">
+        <label><input type="checkbox" name="petugas" value="Mohamad Iqbal, S.H., M.H."> Mohamad Iqbal, S.H., M.H.</label>
+        <label><input type="checkbox" name="petugas" value="Annis Isnaeni, S.T."> Annis Isnaeni, S.T.</label>
+        <label><input type="checkbox" name="petugas" value="Eka Astutiyanti, S.T."> Eka Astutiyanti, S.T.</label>
+        <label><input type="checkbox" name="petugas" value="Rendra Prasetya P, A.Md"> Rendra Prasetya P, A.Md</label>
+        <label><input type="checkbox" name="petugas" value="Al Ade Bagus, A.Md"> Al Ade Bagus, A.Md</label>
+      </div>
+
+      <label>Jenis UTTP</label><input type="text" name="jenisUTTP">
+      <label>Merk / Tipe / No. Seri</label><input type="text" name="merkTipe">
+      <label>Kapasitas</label><input type="text" name="kapasitas">
+      <label>Alat Perlengkapan</label><input type="text" name="alatPerlengkapan">
+      <label>Jumlah Alat Perlengkapan</label><input type="number" name="jumlahAlat" min="0">
+      <label>CTT Terakhir</label><input type="text" name="cttTerakhir">
+
+      <label>Keterangan</label><textarea name="keterangan"></textarea>
+
+      <label>Upload Foto (opsional)</label>
+      <input type="file" name="photos" accept="image/*" multiple>
+      <div class="thumbs" id="thumbs-potensi"></div>
+
+      <label>Gunakan lokasi saat ini (opsional)</label>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn small" onclick="useMyLocation('potensi')">📍 Gunakan Lokasi</button>
+        <input type="text" name="latlng" placeholder="Koordinat (lat,lng)" readonly style="flex:1" />
+      </div>
+
+      <label>Tanda Tangan Perusahaan (opsional)</label>
+      <div class="sig-wrap">
+        <canvas id="sig-potensi" class="signature"></canvas>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button type="button" class="btn small" onclick="clearSig('sig-potensi')">Hapus TTD</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn" type="submit">Kirim & Simpan</button>
+        <button class="btn secondary" type="button" onclick="showList('potensi')">Lihat Daftar</button>
+        <button class="btn secondary" type="button" onclick="goHome()">Batal</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- CERAPAN SIMPLE FORMS -->
+  <div id="cerapan-pompa" class="page">
+    <h3>Cerapan Pompa Ukur BBM (Sederhana)</h3>
+    <form id="form-cerapan-pompa">
+      <label>Tanggal</label><input type="date" name="tanggal" required>
+      <label>Nama Perusahaan / Lokasi</label><input type="text" name="nama" required>
+      <label>Petugas (centang)</label>
+      <div class="petugas">
+        <label><input type="checkbox" name="petugas" value="Mohamad Iqbal, S.H., M.H."> Mohamad Iqbal</label>
+        <label><input type="checkbox" name="petugas" value="Annis Isnaeni, S.T."> Annis Isnaeni</label>
+      </div>
+      <label>Hasil</label><select name="hasil"><option>Melanggar</option><option>Tidak Melanggar</option></select>
+      <label>Keterangan</label><textarea name="keterangan"></textarea>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn" type="submit">Simpan</button>
+        <button class="btn secondary" type="button" onclick="goHome()">Batal</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="cerapan-timbangan" class="page">
+    <h3>Cerapan Timbangan (Sederhana)</h3>
+    <form id="form-cerapan-timbangan">
+      <label>Tanggal</label><input type="date" name="tanggal" required>
+      <label>Nama Perusahaan / Lokasi</label><input type="text" name="nama" required>
+      <label>Petugas (centang)</label>
+      <div class="petugas">
+        <label><input type="checkbox" name="petugas" value="Mohamad Iqbal, S.H., M.H."> Mohamad Iqbal</label>
+        <label><input type="checkbox" name="petugas" value="Annis Isnaeni, S.T."> Annis Isnaeni</label>
+      </div>
+      <label>Hasil</label><select name="hasil"><option>Melanggar</option><option>Tidak Melanggar</option></select>
+      <label>Keterangan</label><textarea name="keterangan"></textarea>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn" type="submit">Simpan</button>
+        <button class="btn secondary" type="button" onclick="goHome()">Batal</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="cerapan-bdkt" class="page">
+    <h3>Cerapan BDKT (Sederhana)</h3>
+    <form id="form-cerapan-bdkt">
+      <label>Tanggal</label><input type="date" name="tanggal" required>
+      <label>Nama Perusahaan / Lokasi</label><input type="text" name="nama" required>
+      <label>Petugas (centang)</label>
+      <div class="petugas">
+        <label><input type="checkbox" name="petugas" value="Mohamad Iqbal, S.H., M.H."> Mohamad Iqbal</label>
+        <label><input type="checkbox" name="petugas" value="Annis Isnaeni, S.T."> Annis Isnaeni</label>
+      </div>
+      <label>Hasil</label><select name="hasil"><option>Melanggar</option><option>Tidak Melanggar</option></select>
+      <label>Keterangan</label><textarea name="keterangan"></textarea>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn" type="submit">Simpan</button>
+        <button class="btn secondary" type="button" onclick="goHome()">Batal</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- MAP PAGE -->
+  <div id="map" class="page">
+    <h3>Map Pengawasan BDKT</h3>
+    <div id="mapid"></div>
+    <div style="margin-top:8px"><button class="btn secondary" onclick="goHome()">⬅ Kembali</button></div>
+  </div>
+
+  <!-- GRAFIK PAGE -->
+  <div id="grafik" class="page">
+    <h3>Grafik Laporan Pengawasan</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <label style="font-weight:600">Tahun:</label>
+      <select id="filter-year"></select>
+      <button class="btn small" onclick="refreshCharts()">Apply</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="card chart-wrap">
+        <h4 style="margin-top:0">UTTP — Melanggar vs Tidak</h4>
+        <canvas id="chartUttp" height="220"></canvas>
+      </div>
+      <div class="card chart-wrap">
+        <h4 style="margin-top:0">BDKT — Melanggar vs Tidak</h4>
+        <canvas id="chartBdkt" height="220"></canvas>
+      </div>
+    </div>
+
+    <div style="margin-top:12px"><button class="btn secondary" onclick="goHome()">⬅ Kembali</button></div>
+  </div>
+
+  <!-- LIST PAGE -->
+  <div id="list-page" class="page">
+    <h3>Daftar Laporan</h3>
+    <div id="list-content"></div>
+    <div style="margin-top:12px"><button class="btn secondary" onclick="goHome()">⬅ Kembali</button></div>
+  </div>
+</div>
+
+<!-- overlay (for map quick create) -->
+<div id="overlay" class="overlay" style="display:none"><div class="box">
+  <h4>Buat Marker / Laporan Singkat</h4>
+  <label>Jenis</label>
+  <select id="overlay-type"><option>BDKT</option><option>UTTP</option><option>Potensi</option><option>Cerapan</option></select>
+  <label>Nama / Judul</label><input id="overlay-name" type="text">
+  <label>Keterangan</label><textarea id="overlay-note"></textarea>
+  <div style="display:flex;gap:8px;margin-top:10px">
+    <button class="btn" onclick="saveOverlayMarker()">Simpan</button>
+    <button class="btn secondary" onclick="closeOverlay()">Batal</button>
+  </div>
+</div></div>
+
+<!-- bottom nav -->
+<div class="bottom-nav">
+  <button onclick="goHome()"><i class="fa-solid fa-house"></i>Home</button>
+  <button onclick="openMenu('laporan')"><i class="fa-solid fa-file-lines"></i>Laporan</button>
+  <button onclick="openMenu('cerapan')"><i class="fa-solid fa-vials"></i>Cerapan</button>
+  <button onclick="openMenu('map')"><i class="fa-solid fa-map-location-dot"></i>Map</button>
+  <button onclick="openMenu('grafik')"><i class="fa-solid fa-chart-column"></i>Grafik</button>
+</div>
+
+<script>
+/* ======================================================
+   CONFIG - ganti jika perlu
+   ====================================================== */
+
+// Apps Script Web App URL (kamu berikan)
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxE0Xk_KAC7q3GJpcjXQwNDMi3FqRwCSmq-gbb_RmPDFsOg1VgKENeblWelIUbtb3Om/exec";
+
+
+// CSV publish link (kamu berikan) - digunakan untuk grafik
+const CSV_PUBLISHED_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRKPkVqXqoXcMD5lVGFarTAeOwfBAAl5Ow-ZePNgVuzLCl7X654X9NghEh722EEaBOFuN5aFqvS2QNb/pub?gid=0&single=true&output=csv";
+
+/* ======================================================
+   Utilities (localStorage helpers)
+   ====================================================== */
+function uid(prefix='id'){ return prefix + '_' + Date.now() + '_' + Math.floor(Math.random()*1000) }
+function getLocal(key){ try{ const v=localStorage.getItem(key); return v?JSON.parse(v):[] }catch(e){ return [] } }
+function setLocal(key, arr){ localStorage.setItem(key, JSON.stringify(arr)) }
+function pushLocal(key, item){ const a = getLocal(key); a.push(item); setLocal(key,a); return a }
+
+/* ======================================================
+   Navigation helpers
+   ====================================================== */
+function hideAll(){ document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')) }
+function goHome(){ hideAll(); document.getElementById('home').classList.add('active') }
+function openMenu(id){
+  hideAll();
+  const el = document.getElementById(id);
+  if(el){
+    el.classList.add('active');
+    // if opening map, ensure it redraws after visible
+    if(id==='map') setTimeout(()=>{ try{ map.invalidateSize() }catch(e){} },300);
+    // refresh signature canvases when opening laporan menu (safety)
+    if(id==='laporan') setTimeout(refreshAllSignatures,300);
+  } else {
+    // don't show alerts in AppsGeyser; fallback to console
+    console.warn("openMenu: element not found ->", id);
+  }
+}
+function openForm(key){  hideAll()
+  if(key==='uttp') document.getElementById('form-uttp').classList.add('active')
+  if(key==='bdkt') document.getElementById('form-bdkt').classList.add('active')
+  if(key==='potensi') document.getElementById('form-potensi').classList.add('active')
+  if(key==='cerapan-pompa') document.getElementById('cerapan-pompa').classList.add('active')
+  if(key==='cerapan-timbangan') document.getElementById('cerapan-timbangan').classList.add('active')
+  if(key==='cerapan-bdkt') document.getElementById('cerapan-bdkt').classList.add('active')
+  // FIX APPSGEYSER: refresh signature canvases after form becomes visible
+  setTimeout(refreshAllSignatures, 300);
+
+}
+
+/* ======================================================
+   Signature canvas helpers
+   ====================================================== */
+function fitCanvas(canvas){
+  const ratio = window.devicePixelRatio || 1
+  canvas.width = canvas.offsetWidth * ratio
+  canvas.height = canvas.offsetHeight * ratio
+  const ctx = canvas.getContext('2d'); ctx.scale(ratio, ratio); ctx.lineWidth=2; ctx.lineCap='round'; ctx.strokeStyle='#000'
+}
+function enableSignature(id){
+  const c = document.getElementById(id); if(!c) return
+  fitCanvas(c)
+  const ctx = c.getContext('2d'); let drawing=false
+  function pos(e){ const rect=c.getBoundingClientRect(); if(e.touches) return {x:e.touches[0].clientX-rect.left,y:e.touches[0].clientY-rect.top}; return {x:e.clientX-rect.left,y:e.clientY-rect.top} }
+  c.addEventListener('mousedown', e=>{ drawing=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y) })
+  c.addEventListener('mousemove', e=>{ if(!drawing) return; const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke() })
+  c.addEventListener('mouseup', ()=>drawing=false); c.addEventListener('mouseout', ()=>drawing=false)
+  c.addEventListener('touchstart', e=>{ e.preventDefault(); drawing=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y) })
+  c.addEventListener('touchmove', e=>{ e.preventDefault(); if(!drawing) return; const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke() })
+  c.addEventListener('touchend', ()=>drawing=false)
+}
+function clearSig(id){ const c=document.getElementById(id); if(!c) return; const ctx=c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height) }
+
+
+
+/* ======================================================
+   Signature refresh helper (for AppsGeyser WebView)
+   Ensures canvas is resized AFTER the form becomes visible.
+   ====================================================== */
+function refreshAllSignatures(){
+  ['sig-uttp','sig-bdkt','sig-potensi'].forEach(id=>{
+    const c = document.getElementById(id);
+    if(c){
+      try{ fitCanvas(c); }catch(e){ console.warn('refreshAllSignatures failed for', id, e); }
+    }
+  });
+}
+/* ======================================================
+   File preview (photos)
+   ====================================================== */
+function previewFiles(inputEl, thumbsId){
+  const files = Array.from(inputEl.files || []); const cont=document.getElementById(thumbsId); cont.innerHTML=''
+  files.forEach(f=>{ const r=new FileReader(); r.onload=e=>{ const img=document.createElement('img'); img.src=e.target.result; cont.appendChild(img) }; r.readAsDataURL(f) })
+}
+document.addEventListener('change', e=>{
+  if(!e.target) return
+  if(e.target.name==='photos'){
+    const form = e.target.closest('form'); if(!form) return
+    if(form.id==='uttpForm') previewFiles(e.target,'thumbs-uttp')
+    if(form.id==='bdktForm') previewFiles(e.target,'thumbs-bdkt')
+    if(form.id==='potensiForm') previewFiles(e.target,'thumbs-potensi')
+  }
+})
+
+/* ======================================================
+   Geolocation helper
+   ====================================================== */
+function useMyLocation(prefix){
+  if(!navigator.geolocation){ alert('Geolocation tidak tersedia'); return }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const lat = pos.coords.latitude.toFixed(6), lng = pos.coords.longitude.toFixed(6)
+    let form = prefix==='uttp' ? document.getElementById('uttpForm') : prefix==='bdkt' ? document.getElementById('bdktForm') : document.getElementById('potensiForm')
+    if(!form){ alert('Form tidak ditemukan'); return }
+    let input = form.querySelector('input[name="latlng"]')
+    if(!input){ input=document.createElement('input'); input.type='text'; input.name='latlng'; input.style.display='none'; form.appendChild(input) }
+    input.value = lat + ',' + lng
+    alert('Lokasi diisi: '+lat+','+lng)
+  }, err=>alert('Gagal mendapatkan lokasi: '+err.message), {enableHighAccuracy:true, timeout:10000})
+}
+
+/* ======================================================
+   Read files to data URLs
+   ====================================================== */
+function filesToDataURLs(fileList){
+  const files = Array.from(fileList || [])
+  return Promise.all(files.map(f=> new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res({name:f.name,data:r.result}); r.onerror=rej; r.readAsDataURL(f) })))
+}
+
+/* ======================================================
+   Submit handlers: save local + send to Apps Script
+   ====================================================== */
+async function submitReport(form, typeKey){
+  const fd = new FormData(form)
+  const data = { id: uid(typeKey), jenis: typeKey, timestamp: new Date().toISOString() }
+  for(const [k,v] of fd.entries()){
+    if(k==='petugas') continue
+    data[k] = v
+  }
+  // petugas
+  const pet = Array.from(form.querySelectorAll('input[name="petugas"]:checked')).map(i=>i.value)
+  data.petugas = pet.join(', ')
+
+  // photos
+  const photoInput = form.querySelector('input[type=file][name="photos"]')
+  if(photoInput && photoInput.files.length>0){
+    try{ data.photos = await filesToDataURLs(photoInput.files) }catch(e){ data.photos = [] }
+  } else data.photos = []
+
+  // signature
+  const sigId = typeKey==='UTTP' ? 'sig-uttp' : typeKey==='BDKT' ? 'sig-bdkt' : 'sig-potensi'
+  const c = document.getElementById(sigId)
+  try{ data.signature = c && c.toDataURL ? c.toDataURL('image/png') : null }catch(e){ data.signature = null }
+
+  // location
+  const latlngInput = form.querySelector('input[name="latlng"]')
+  if(latlngInput && latlngInput.value){
+    const parts = latlngInput.value.split(',').map(s=>s.trim())
+    if(parts.length===2) data.location = { lat: parseFloat(parts[0]), lng: parseFloat(parts[1]) }
+  }
+
+  // save local
+  const storageKey = typeKey==='UTTP' ? 'reports_UTTP' : (typeKey==='BDKT' ? 'reports_BDKT' : 'reports_POTENSI')
+  pushLocal(storageKey, data)
+
+  // map markers
+  if(data.location) {
+    pushLocal('map_markers', { id:data.id, jenis:typeKey, title: data.namaPerusahaan||data.nama||typeKey, lat:data.location.lat, lng:data.location.lng, ts:data.timestamp })
+    if(typeof addMarker === 'function') addMarker({id:data.id, title:data.namaPerusahaan||data.nama||typeKey, lat:data.location.lat, lng:data.location.lng, jenis:typeKey, ts:data.timestamp})
+  }
+
+  // optional send to Apps Script (does not block UI)
+  if(APPS_SCRIPT_URL && APPS_SCRIPT_URL.length>10){
+    fetch(APPS_SCRIPT_URL, { method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) })
+      .then(r=>r.text()).then(_=>console.log('Sent to Apps Script')).catch(e=>console.warn('Send failed',e))
+  }
+
+  alert('Laporan tersimpan ✅')
+  form.reset()
+  // clear thumbs
+  const thumbsId = typeKey==='UTTP' ? 'thumbs-uttp' : typeKey==='BDKT' ? 'thumbs-bdkt' : 'thumbs-potensi'
+  const thumbs = document.getElementById(thumbsId); if(thumbs) thumbs.innerHTML = ''
+  clearSig(sigId)
+  goHome()
+  await refreshCharts()
+}
+
+/* bind forms */
+/* Consolidated initialization to prevent duplicated listeners and ensure AppsGeyser WebView compatibility */
+function initApp(){
+  // enable signature canvases
+  ['sig-uttp','sig-bdkt','sig-potensi'].forEach(id=>enableSignature(id))
+
+  // bind report forms
+  const u = document.getElementById('uttpForm'); if(u) u.addEventListener('submit', e=>{ e.preventDefault(); submitReport(u,'UTTP') })
+  const b = document.getElementById('bdktForm'); if(b) b.addEventListener('submit', e=>{ e.preventDefault(); submitReport(b,'BDKT') })
+  const p = document.getElementById('potensiForm'); if(p) p.addEventListener('submit', e=>{ e.preventDefault(); submitReport(p,'POTENSI') })
+  // cerapan simple
+  const cp = document.getElementById('form-cerapan-pompa'); if(cp) cp.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(cp,'Pompa BBM') })
+  const ct = document.getElementById('form-cerapan-timbangan'); if(ct) ct.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(ct,'Timbangan') })
+  const cb = document.getElementById('form-cerapan-bdkt'); if(cb) cb.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(cb,'Cerapan BDKT') })
+  // init map + charts
+  initMap()
+  initCharts()
+  populateYearFilter()
+  // ensure overlay hidden
+  const ov = document.getElementById('overlay'); if(ov) ov.style.display='none'
+}
+
+/* ======================================================
+   Cerapan submit (local)
+   ====================================================== */
+function submitCerapan(form, jenis){
+  const fd = new FormData(form)
+  const data = { id: uid('cerapan'), jenis, tanggal: fd.get('tanggal'), nama: fd.get('nama'), petugas: Array.from(form.querySelectorAll('input[name="petugas"]:checked')).map(i=>i.value).join(', '), hasil: fd.get('hasil'), keterangan: fd.get('keterangan'), timestamp: new Date().toISOString() }
+  pushLocal('cerapan', data)
+  alert('Cerapan tersimpan (lokal)')
+  form.reset()
+  goHome()
+}
+
+/* ======================================================
+   MAP (Leaflet)
+   ====================================================== */
+let map, markersLayer
+function initMap(){
+  try{
+    map = L.map('mapid').setView([-6.966667,110.416667],12)
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map)
+    markersLayer = L.layerGroup().addTo(map)
+    loadMarkers()
+    map.on('click', e=> openOverlay(e.latlng))
+  }catch(e){
+    console.warn('Map init failed', e)
+  }
+}
+
+function addMarker(m){
+  if(!map) return
+  const marker = L.marker([m.lat,m.lng]).addTo(markersLayer)
+  marker.bindPopup(`<strong>${m.title}</strong><br>${m.jenis || ''}<br>${new Date(m.ts).toLocaleString()}`)
+}
+
+function loadMarkers(){
+  if(!markersLayer) return
+  markersLayer.clearLayers()
+  const mk = getLocal('map_markers'); mk.forEach(m=> addMarker(m))
+}
+
+/* quick overlay to add simple marker */
+let overlayLat = null
+function openOverlay(latlng){
+  overlayLat = latlng
+  document.getElementById('overlay').style.display='flex'
+  document.getElementById('overlay-name').value=''
+  document.getElementById('overlay-note').value=''
+}
+function closeOverlay(){ overlayLat=null; document.getElementById('overlay').style.display='none' }
+function saveOverlayMarker(){
+  const name = document.getElementById('overlay-name').value || 'Marker'
+  const note = document.getElementById('overlay-note').value || ''
+  const jenis = document.getElementById('overlay-type').value || 'BDKT'
+  if(!overlayLat){ alert('Lokasi tidak tersedia'); return }
+  const m = { id: uid('map'), title:name, note, jenis, lat: overlayLat.lat, lng: overlayLat.lng, ts: new Date().toISOString() }
+  pushLocal('map_markers', m)
+  addMarker(m)
+  closeOverlay()
+  alert('Marker tersimpan (lokal)')
+}
+
+/* ======================================================
+   Charts - read CSV (live) + local merging
+   ====================================================== */
+
+/* basic CSV parser */
+function parseCSV(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim()!=='')
+  if(lines.length===0) return []
+  const headers = lines[0].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(h=>h.trim().replace(/^"|"$/g,''))
+  const rows = []
+  for(let i=1;i<lines.length;i++){
+    const cols = lines[i].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.trim().replace(/^"|"$/g,''))
+    if(cols.length===headers.length){
+      const obj={}
+      headers.forEach((h,idx)=> obj[h]=cols[idx])
+      rows.push(obj)
+    }
+  }
+  return rows
+}
+async function fetchCsv(url){
+  try{ const res = await fetch(url); const txt = await res.text(); return parseCSV(txt) }catch(e){ console.warn('CSV fetch failed',e); return [] }
+}
+
+/* normalize rows to {tanggal, hasil, jenis} */
+function normalizeRows(rows){
+  return rows.map(r=>{
+    const keys = Object.keys(r)
+    let tanggal=null, hasil=null, jenis=null
+    keys.forEach(k=>{
+      const kl = k.toLowerCase()
+      if(kl.includes('tanggal')||kl.includes('tgl')||kl.includes('date')) tanggal = r[k]
+      if(kl.includes('hasil')||kl.includes('kebenaran')||kl.includes('pengawasan')||kl.includes('result')) hasil = r[k]
+      if(kl.includes('jenis')||kl.includes('type')) jenis = r[k]
+    })
+    return { tanggal, hasil, jenis }
+  }).filter(x=>x.tanggal && x.hasil)
+}
+
+function aggregateByMonth(records, year){
+  const counts = { 'Melanggar': Array(12).fill(0), 'Tidak Melanggar': Array(12).fill(0) }
+  records.forEach(r=>{
+    const d = new Date(r.tanggal)
+    if(isNaN(d)) return
+    if(year!=='all' && String(d.getFullYear()) !== String(year)) return
+    const m = d.getMonth()
+    const res = (r.hasil || '').toString().toLowerCase()
+    if(res.includes('melang')) counts['Melanggar'][m]++
+    else counts['Tidak Melanggar'][m]++
+  })
+  return counts
+}
+
+function aggregateByYear(records){
+  const map = {}
+  records.forEach(r=>{
+    const d = new Date(r.tanggal); if(isNaN(d)) return
+    const y = d.getFullYear()
+    const res = (r.hasil||'').toString().toLowerCase()
+    if(!map[y]) map[y] = { Melanggar:0, 'Tidak Melanggar':0 }
+    if(res.includes('melang')) map[y].Melanggar++
+    else map[y]['Tidak Melanggar']++
+  })
+  return map
+}
+
+/* Chart instances */
+let chartU, chartB
+
+async function initCharts(){
+  try{
+    // create charts
+    const ctxU = document.getElementById('chartUttp').getContext('2d')
+    const ctxB = document.getElementById('chartBdkt').getContext('2d')
+    chartU = new Chart(ctxU,{ type:'bar', data:{ labels:['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets:[{label:'Melanggar',data:Array(12).fill(0),backgroundColor:'rgba(255,99,132,0.7)'},{label:'Tidak Melanggar',data:Array(12).fill(0),backgroundColor:'rgba(75,192,192,0.7)'}] }, options:{ responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}} } })
+    chartB = new Chart(ctxB,{ type:'bar', data:{ labels:['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets:[{label:'Melanggar',data:Array(12).fill(0),backgroundColor:'rgba(255,99,132,0.7)'},{label:'Tidak Melanggar',data:Array(12).fill(0),backgroundColor:'rgba(75,192,192,0.7)'}] }, options:{ responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}} } })
+    await refreshCharts()
+  }catch(e){
+    console.warn('Chart init failed', e)
+  }
+}
+
+/* populate year filter from CSV + local */
+function populateYearFilter(){
+  const sel = document.getElementById('filter-year'); sel.innerHTML=''
+  const years = new Set()
+  // local
+  ;['reports_UTTP','reports_BDKT'].forEach(k=> getLocal(k).forEach(r=>{ const dt = r.tanggal || r.timestamp; if(dt){ const y = new Date(dt).getFullYear(); if(y) years.add(y) } }))
+  // add current year if empty
+  if(years.size===0) years.add(new Date().getFullYear())
+  const arr = Array.from(years).sort((a,b)=>b-a)
+  const optAll = document.createElement('option'); optAll.value='all'; optAll.text='Semua Tahun'; sel.appendChild(optAll)
+  arr.forEach(y=>{ const o=document.createElement('option'); o.value=y; o.text=y; sel.appendChild(o) })
+}
+
+/* refresh chart data */
+async function refreshCharts(){
+  const year = document.getElementById('filter-year').value || 'all'
+  // fetch CSV
+  const csvRows = await fetchCsv(CSV_PUBLISHED_URL)
+  const normCsv = normalizeRows(csvRows)
+  // local rows
+  const localU = getLocal('reports_UTTP').map(r=>({ tanggal: r.tanggal || r.timestamp, hasil: r.hasilPengawasan || r.hasil || r.hasilPengawasan || r.hasilKebenaran || r.result || '' }))
+  const localB = getLocal('reports_BDKT').map(r=>({ tanggal: r.tanggal || r.timestamp, hasil: r.hasilKebenaran || r.hasil || r.hasilPengawasan || r.result || '' }))
+
+  // split csv by jenis (try detect)
+  const csvU = normCsv.filter(r=> r.jenis && r.jenis.toLowerCase().includes('uttp'))
+  const csvB = normCsv.filter(r=> r.jenis && r.jenis.toLowerCase().includes('bdkt'))
+  // fallback: if CSV contains mixed but no jenis, try use header detection - user may need to adjust sheet
+  const allU = csvU.concat(localU)
+  const allB = csvB.concat(localB)
+
+  if(year === 'all'){
+    const aggU = aggregateByYear(allU)
+    const aggB = aggregateByYear(allB)
+    const years = Array.from(new Set([...Object.keys(aggU),...Object.keys(aggB)])).sort()
+    if(years.length===0){
+      // reset to months zero
+      chartU.data.labels = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
+      chartU.data.datasets[0].data = Array(12).fill(0); chartU.data.datasets[1].data = Array(12).fill(0)
+      chartB.data.labels = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
+      chartB.data.datasets[0].data = Array(12).fill(0); chartB.data.datasets[1].data = Array(12).fill(0)
+    } else {
+      // show per-year bars
+      chartU.data.labels = years
+      chartU.data.datasets[0].data = years.map(y=> aggU[y] ? aggU[y].Melanggar : 0)
+      chartU.data.datasets[1].data = years.map(y=> aggU[y] ? aggU[y]['Tidak Melanggar'] : 0)
+      chartB.data.labels = years
+      chartB.data.datasets[0].data = years.map(y=> aggB[y] ? aggB[y].Melanggar : 0)
+      chartB.data.datasets[1].data = years.map(y=> aggB[y] ? aggB[y]['Tidak Melanggar'] : 0)
+    }
+  } else {
+    const aggU = aggregateByMonth(allU, year)
+    const aggB = aggregateByMonth(allB, year)
+    const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
+    chartU.data.labels = months
+    chartU.data.datasets[0].data = aggU['Melanggar']
+    chartU.data.datasets[1].data = aggU['Tidak Melanggar']
+    chartB.data.labels = months
+    chartB.data.datasets[0].data = aggB['Melanggar']
+    chartB.data.datasets[1].data = aggB['Tidak Melanggar']
+  }
+  chartU.update(); chartB.update()
+  populateYearFilter()
+}
+
+/* wrapper used by UI */
+function refreshChartsTrigger(){ refreshCharts().catch(e=>console.warn(e)) }
+
+/* ======================================================
+   List view
+   ====================================================== */
+function showList(key){
+  hideAll(); document.getElementById('list-page').classList.add('active')
+  const cont = document.getElementById('list-content'); cont.innerHTML=''
+  const dataKey = key==='uttp' ? 'reports_UTTP' : key==='bdkt' ? 'reports_BDKT' : 'reports_POTENSI'
+  const arr = getLocal(dataKey)
+  if(!arr || arr.length===0){ cont.innerHTML = '<div class="card">Belum ada data</div>'; return }
+  arr.slice().reverse().forEach(r=>{
+    const d = document.createElement('div'); d.className='card'; d.style.marginBottom='10px'
+    d.innerHTML = `<strong>${r.namaPerusahaan||r.nama||'(tanpa nama)'}</strong><div style="font-size:13px;color:#555">${r.jenis||''} • ${r.tanggal||r.timestamp}</div><div style="margin-top:6px">${r.keterangan||r.ket||''}</div>`
+    cont.appendChild(d)
+  })
+}
+
+/* ======================================================
+   Init/boot
+   ====================================================== */
+let initDone=false
+function initMapAndChartsAndUI(){
+  if(initDone) return; initDone=true
+  // Map init (map variable created earlier by initMap)
+  // Charts init
+  initCharts()
+}
+
+/* Ensure only one DOMContentLoaded listener */
+document.addEventListener('DOMContentLoaded', function(){
+  try{
+    initApp();
+  }catch(e){
+    console.warn('initApp failed', e)
+  }
+});
+</script>
+</body>
+</html>
+
+

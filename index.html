@@ -1,3 +1,12 @@
+<script>
+   /* ===============================
+   LOCAL STORAGE DIMATIKAN TOTAL
+================================ */
+function getLocal(){ return []; }
+function setLocal(){ }
+function pushLocal(){ return []; }
+</script>
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -401,19 +410,18 @@ canvas.signature{width:100%;height:140px;border:1px solid #ccc;border-radius:6px
    ====================================================== */
 
 // Apps Script Web App URL (kamu berikan)
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxE0Xk_KAC7q3GJpcjXQwNDMi3FqRwCSmq-gbb_RmPDFsOg1VgKENeblWelIUbtb3Om/exec";
-
-
-// CSV publish link (kamu berikan) - digunakan untuk grafik
-const CSV_PUBLISHED_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRKPkVqXqoXcMD5lVGFarTAeOwfBAAl5Ow-ZePNgVuzLCl7X654X9NghEh722EEaBOFuN5aFqvS2QNb/pub?gid=0&single=true&output=csv";
+const APPS_SCRIPT_URL =
+ "https://script.google.com/macros/s/AKfycbw1JKPNXKZ4ief6OQSou2Q-Ye3adGKUR9nDVTlebRqJwnLcQ5OrfafZftUfUCA3S5fO/exec";
 
 /* ======================================================
    Utilities (localStorage helpers)
    ====================================================== */
 function uid(prefix='id'){ return prefix + '_' + Date.now() + '_' + Math.floor(Math.random()*1000) }
-function getLocal(key){ try{ const v=localStorage.getItem(key); return v?JSON.parse(v):[] }catch(e){ return [] } }
+
+/*function getLocal(key){ try{ const v=localStorage.getItem(key); return v?JSON.parse(v):[] }catch(e){ return [] } }
 function setLocal(key, arr){ localStorage.setItem(key, JSON.stringify(arr)) }
-function pushLocal(key, item){ const a = getLocal(key); a.push(item); setLocal(key,a); return a }
+function pushLocal(key, item){ const a = getLocal(key); a.push(item); setLocal(key,a); return a } */
+  
 
 /* ======================================================
    Navigation helpers
@@ -557,20 +565,27 @@ async function submitReport(form, typeKey){
   }
 
   // save local
-  const storageKey = typeKey==='UTTP' ? 'reports_UTTP' : (typeKey==='BDKT' ? 'reports_BDKT' : 'reports_POTENSI')
-  pushLocal(storageKey, data)
+  // ❌ DISABLE localStorage (hindari QuotaExceeded)
+// pushLocal(storageKey, data)
+
+ /* pushLocal(storageKey, data)*/
 
   // map markers
   if(data.location) {
-    pushLocal('map_markers', { id:data.id, jenis:typeKey, title: data.namaPerusahaan||data.nama||typeKey, lat:data.location.lat, lng:data.location.lng, ts:data.timestamp })
+    // ❌ disable map local storage
     if(typeof addMarker === 'function') addMarker({id:data.id, title:data.namaPerusahaan||data.nama||typeKey, lat:data.location.lat, lng:data.location.lng, jenis:typeKey, ts:data.timestamp})
   }
 
   // optional send to Apps Script (does not block UI)
-  if(APPS_SCRIPT_URL && APPS_SCRIPT_URL.length>10){
-    fetch(APPS_SCRIPT_URL, { method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) })
-      .then(r=>r.text()).then(_=>console.log('Sent to Apps Script')).catch(e=>console.warn('Send failed',e))
-  }
+ if (APPS_SCRIPT_URL && APPS_SCRIPT_URL.length > 10) {
+  fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify(data)   // NO HEADERS!!
+  })
+  .then(r => r.text())
+  .then(msg => console.log("Sent to Apps Script:", msg))
+  .catch(err => console.warn("Send failed", err));
+}
 
   alert('Laporan tersimpan ✅')
   form.reset()
@@ -665,192 +680,40 @@ function saveOverlayMarker(){
   alert('Marker tersimpan (lokal)')
 }
 
-/* ======================================================
-   Charts - read CSV (live) + local merging
-   ====================================================== */
 
-/* basic CSV parser */
-function parseCSV(text){
-  const lines = text.split(/\r?\n/).filter(l=>l.trim()!=='')
-  if(lines.length===0) return []
-  const headers = lines[0].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(h=>h.trim().replace(/^"|"$/g,''))
-  const rows = []
-  for(let i=1;i<lines.length;i++){
-    const cols = lines[i].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.trim().replace(/^"|"$/g,''))
-    if(cols.length===headers.length){
-      const obj={}
-      headers.forEach((h,idx)=> obj[h]=cols[idx])
-      rows.push(obj)
+<script>
+  let chartUttp = null;
+
+async function loadGrafikUTTP(){
+  const year = document.getElementById("filter-year").value;
+
+  const res = await fetch(
+
+  APPS_SCRIPT_URL + `?mode=grafik&jenis=UTTP&year=${year}`
+)
+
+  );
+  const data = await res.json();
+
+  const ctx = document.getElementById("chartUttp").getContext("2d");
+  if(chartUttp) chartUttp.destroy();
+
+  chartUttp = new Chart(ctx,{
+    type:"bar",
+    data:{
+      labels:["Melanggar","Tidak Melanggar"],
+      datasets:[{
+        label:"Jumlah UTTP",
+        data:[data.melanggar, data.tidak],
+        backgroundColor:["#e74c3c","#2ecc71"]
+      }]
+    },
+    options:{
+      responsive:true,
+      scales:{ y:{ beginAtZero:true } }
     }
-  }
-  return rows
+  });
 }
-async function fetchCsv(url){
-  try{ const res = await fetch(url); const txt = await res.text(); return parseCSV(txt) }catch(e){ console.warn('CSV fetch failed',e); return [] }
-}
-
-/* normalize rows to {tanggal, hasil, jenis} */
-function normalizeRows(rows){
-  return rows.map(r=>{
-    const keys = Object.keys(r)
-    let tanggal=null, hasil=null, jenis=null
-    keys.forEach(k=>{
-      const kl = k.toLowerCase()
-      if(kl.includes('tanggal')||kl.includes('tgl')||kl.includes('date')) tanggal = r[k]
-      if(kl.includes('hasil')||kl.includes('kebenaran')||kl.includes('pengawasan')||kl.includes('result')) hasil = r[k]
-      if(kl.includes('jenis')||kl.includes('type')) jenis = r[k]
-    })
-    return { tanggal, hasil, jenis }
-  }).filter(x=>x.tanggal && x.hasil)
-}
-
-function aggregateByMonth(records, year){
-  const counts = { 'Melanggar': Array(12).fill(0), 'Tidak Melanggar': Array(12).fill(0) }
-  records.forEach(r=>{
-    const d = new Date(r.tanggal)
-    if(isNaN(d)) return
-    if(year!=='all' && String(d.getFullYear()) !== String(year)) return
-    const m = d.getMonth()
-    const res = (r.hasil || '').toString().toLowerCase()
-    if(res.includes('melang')) counts['Melanggar'][m]++
-    else counts['Tidak Melanggar'][m]++
-  })
-  return counts
-}
-
-function aggregateByYear(records){
-  const map = {}
-  records.forEach(r=>{
-    const d = new Date(r.tanggal); if(isNaN(d)) return
-    const y = d.getFullYear()
-    const res = (r.hasil||'').toString().toLowerCase()
-    if(!map[y]) map[y] = { Melanggar:0, 'Tidak Melanggar':0 }
-    if(res.includes('melang')) map[y].Melanggar++
-    else map[y]['Tidak Melanggar']++
-  })
-  return map
-}
-
-/* Chart instances */
-let chartU, chartB
-
-async function initCharts(){
-  try{
-    // create charts
-    const ctxU = document.getElementById('chartUttp').getContext('2d')
-    const ctxB = document.getElementById('chartBdkt').getContext('2d')
-    chartU = new Chart(ctxU,{ type:'bar', data:{ labels:['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets:[{label:'Melanggar',data:Array(12).fill(0),backgroundColor:'rgba(255,99,132,0.7)'},{label:'Tidak Melanggar',data:Array(12).fill(0),backgroundColor:'rgba(75,192,192,0.7)'}] }, options:{ responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}} } })
-    chartB = new Chart(ctxB,{ type:'bar', data:{ labels:['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets:[{label:'Melanggar',data:Array(12).fill(0),backgroundColor:'rgba(255,99,132,0.7)'},{label:'Tidak Melanggar',data:Array(12).fill(0),backgroundColor:'rgba(75,192,192,0.7)'}] }, options:{ responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}} } })
-    await refreshCharts()
-  }catch(e){
-    console.warn('Chart init failed', e)
-  }
-}
-
-/* populate year filter from CSV + local */
-function populateYearFilter(){
-  const sel = document.getElementById('filter-year'); sel.innerHTML=''
-  const years = new Set()
-  // local
-  ;['reports_UTTP','reports_BDKT'].forEach(k=> getLocal(k).forEach(r=>{ const dt = r.tanggal || r.timestamp; if(dt){ const y = new Date(dt).getFullYear(); if(y) years.add(y) } }))
-  // add current year if empty
-  if(years.size===0) years.add(new Date().getFullYear())
-  const arr = Array.from(years).sort((a,b)=>b-a)
-  const optAll = document.createElement('option'); optAll.value='all'; optAll.text='Semua Tahun'; sel.appendChild(optAll)
-  arr.forEach(y=>{ const o=document.createElement('option'); o.value=y; o.text=y; sel.appendChild(o) })
-}
-
-/* refresh chart data */
-async function refreshCharts(){
-  const year = document.getElementById('filter-year').value || 'all'
-  // fetch CSV
-  const csvRows = await fetchCsv(CSV_PUBLISHED_URL)
-  const normCsv = normalizeRows(csvRows)
-  // local rows
-  const localU = getLocal('reports_UTTP').map(r=>({ tanggal: r.tanggal || r.timestamp, hasil: r.hasilPengawasan || r.hasil || r.hasilPengawasan || r.hasilKebenaran || r.result || '' }))
-  const localB = getLocal('reports_BDKT').map(r=>({ tanggal: r.tanggal || r.timestamp, hasil: r.hasilKebenaran || r.hasil || r.hasilPengawasan || r.result || '' }))
-
-  // split csv by jenis (try detect)
-  const csvU = normCsv.filter(r=> r.jenis && r.jenis.toLowerCase().includes('uttp'))
-  const csvB = normCsv.filter(r=> r.jenis && r.jenis.toLowerCase().includes('bdkt'))
-  // fallback: if CSV contains mixed but no jenis, try use header detection - user may need to adjust sheet
-  const allU = csvU.concat(localU)
-  const allB = csvB.concat(localB)
-
-  if(year === 'all'){
-    const aggU = aggregateByYear(allU)
-    const aggB = aggregateByYear(allB)
-    const years = Array.from(new Set([...Object.keys(aggU),...Object.keys(aggB)])).sort()
-    if(years.length===0){
-      // reset to months zero
-      chartU.data.labels = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
-      chartU.data.datasets[0].data = Array(12).fill(0); chartU.data.datasets[1].data = Array(12).fill(0)
-      chartB.data.labels = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
-      chartB.data.datasets[0].data = Array(12).fill(0); chartB.data.datasets[1].data = Array(12).fill(0)
-    } else {
-      // show per-year bars
-      chartU.data.labels = years
-      chartU.data.datasets[0].data = years.map(y=> aggU[y] ? aggU[y].Melanggar : 0)
-      chartU.data.datasets[1].data = years.map(y=> aggU[y] ? aggU[y]['Tidak Melanggar'] : 0)
-      chartB.data.labels = years
-      chartB.data.datasets[0].data = years.map(y=> aggB[y] ? aggB[y].Melanggar : 0)
-      chartB.data.datasets[1].data = years.map(y=> aggB[y] ? aggB[y]['Tidak Melanggar'] : 0)
-    }
-  } else {
-    const aggU = aggregateByMonth(allU, year)
-    const aggB = aggregateByMonth(allB, year)
-    const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
-    chartU.data.labels = months
-    chartU.data.datasets[0].data = aggU['Melanggar']
-    chartU.data.datasets[1].data = aggU['Tidak Melanggar']
-    chartB.data.labels = months
-    chartB.data.datasets[0].data = aggB['Melanggar']
-    chartB.data.datasets[1].data = aggB['Tidak Melanggar']
-  }
-  chartU.update(); chartB.update()
-  populateYearFilter()
-}
-
-/* wrapper used by UI */
-function refreshChartsTrigger(){ refreshCharts().catch(e=>console.warn(e)) }
-
-/* ======================================================
-   List view
-   ====================================================== */
-function showList(key){
-  hideAll(); document.getElementById('list-page').classList.add('active')
-  const cont = document.getElementById('list-content'); cont.innerHTML=''
-  const dataKey = key==='uttp' ? 'reports_UTTP' : key==='bdkt' ? 'reports_BDKT' : 'reports_POTENSI'
-  const arr = getLocal(dataKey)
-  if(!arr || arr.length===0){ cont.innerHTML = '<div class="card">Belum ada data</div>'; return }
-  arr.slice().reverse().forEach(r=>{
-    const d = document.createElement('div'); d.className='card'; d.style.marginBottom='10px'
-    d.innerHTML = `<strong>${r.namaPerusahaan||r.nama||'(tanpa nama)'}</strong><div style="font-size:13px;color:#555">${r.jenis||''} • ${r.tanggal||r.timestamp}</div><div style="margin-top:6px">${r.keterangan||r.ket||''}</div>`
-    cont.appendChild(d)
-  })
-}
-
-/* ======================================================
-   Init/boot
-   ====================================================== */
-let initDone=false
-function initMapAndChartsAndUI(){
-  if(initDone) return; initDone=true
-  // Map init (map variable created earlier by initMap)
-  // Charts init
-  initCharts()
-}
-
-/* Ensure only one DOMContentLoaded listener */
-document.addEventListener('DOMContentLoaded', function(){
-  try{
-    initApp();
-  }catch(e){
-    console.warn('initApp failed', e)
-  }
-});
 </script>
 </body>
 </html>
-
-

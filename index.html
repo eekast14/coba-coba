@@ -1,11 +1,4 @@
-<script>
-   /* ===============================
-   LOCAL STORAGE DIMATIKAN TOTAL
-================================ */
-function getLocal(){ return []; }
-function setLocal(){ }
-function pushLocal(){ return []; }
-</script>
+
 
 <!DOCTYPE html>
 <html lang="id">
@@ -598,12 +591,12 @@ async function submitReport(form, typeKey){
   const thumbs = document.getElementById(thumbsId); if(thumbs) thumbs.innerHTML = ''
   clearSig(sigId)
   goHome()
-  await loadGrafikUTTP()
+  
 }
 
 /* bind forms */
 /* Consolidated initialization to prevent duplicated listeners and ensure AppsGeyser WebView compatibility */
-function initApp(){
+
   function initApp(){
   ['sig-uttp','sig-bdkt','sig-potensi'].forEach(id=>enableSignature(id))
 
@@ -708,8 +701,6 @@ async function loadGrafikUTTP(){
   const res = await fetch(
 
   APPS_SCRIPT_URL + `?mode=grafik&jenis=UTTP&year=${year}`
-)
-
   );
   const data = await res.json();
 

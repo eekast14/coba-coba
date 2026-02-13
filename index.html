@@ -356,8 +356,12 @@ canvas.signature{width:100%;height:140px;border:1px solid #ccc;border-radius:6px
     <h3>Grafik Laporan Pengawasan</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <label style="font-weight:600">Tahun:</label>
-      <select id="filter-year"></select>
-      <button class="btn small" onclick="refreshCharts()">Apply</button>
+      <select id="filter-year">
+         <option value="2024">2024</option>
+  <option value="2025">2025</option>
+  <option value="2026" selected>2026</option>
+      </select>
+      <button class="btn small" onclick="loadGrafikUTTP()">Apply</button>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -594,27 +598,40 @@ async function submitReport(form, typeKey){
   const thumbs = document.getElementById(thumbsId); if(thumbs) thumbs.innerHTML = ''
   clearSig(sigId)
   goHome()
-  await refreshCharts()
+  await loadGrafikUTTP()
 }
 
 /* bind forms */
 /* Consolidated initialization to prevent duplicated listeners and ensure AppsGeyser WebView compatibility */
 function initApp(){
-  // enable signature canvases
+  function initApp(){
   ['sig-uttp','sig-bdkt','sig-potensi'].forEach(id=>enableSignature(id))
 
-  // bind report forms
-  const u = document.getElementById('uttpForm'); if(u) u.addEventListener('submit', e=>{ e.preventDefault(); submitReport(u,'UTTP') })
-  const b = document.getElementById('bdktForm'); if(b) b.addEventListener('submit', e=>{ e.preventDefault(); submitReport(b,'BDKT') })
-  const p = document.getElementById('potensiForm'); if(p) p.addEventListener('submit', e=>{ e.preventDefault(); submitReport(p,'POTENSI') })
-  // cerapan simple
-  const cp = document.getElementById('form-cerapan-pompa'); if(cp) cp.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(cp,'Pompa BBM') })
-  const ct = document.getElementById('form-cerapan-timbangan'); if(ct) ct.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(ct,'Timbangan') })
-  const cb = document.getElementById('form-cerapan-bdkt'); if(cb) cb.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(cb,'Cerapan BDKT') })
-  // init map + charts
+  const u = document.getElementById('uttpForm'); 
+  if(u) u.addEventListener('submit', e=>{ e.preventDefault(); submitReport(u,'UTTP') })
+
+  const b = document.getElementById('bdktForm'); 
+  if(b) b.addEventListener('submit', e=>{ e.preventDefault(); submitReport(b,'BDKT') })
+
+  const p = document.getElementById('potensiForm'); 
+  if(p) p.addEventListener('submit', e=>{ e.preventDefault(); submitReport(p,'POTENSI') })
+
+  const cp = document.getElementById('form-cerapan-pompa'); 
+  if(cp) cp.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(cp,'Pompa BBM') })
+
+  const ct = document.getElementById('form-cerapan-timbangan'); 
+  if(ct) ct.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(ct,'Timbangan') })
+
+  const cb = document.getElementById('form-cerapan-bdkt'); 
+  if(cb) cb.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(cb,'Cerapan BDKT') })
+
   initMap()
-  initCharts()
-  populateYearFilter()
+
+  const ov = document.getElementById('overlay'); 
+  if(ov) ov.style.display='none'
+}
+
+ 
   // ensure overlay hidden
   const ov = document.getElementById('overlay'); if(ov) ov.style.display='none'
 }
@@ -679,6 +696,7 @@ function saveOverlayMarker(){
   closeOverlay()
   alert('Marker tersimpan (lokal)')
 }
+</script>
 
 
 <script>
@@ -715,5 +733,10 @@ async function loadGrafikUTTP(){
   });
 }
 </script>
+  <script>
+     document.addEventListener("DOMContentLoaded", initApp);
+  </script>
+   
+
 </body>
 </html>

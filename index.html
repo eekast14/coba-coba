@@ -597,36 +597,35 @@ async function submitReport(form, typeKey){
 /* bind forms */
 /* Consolidated initialization to prevent duplicated listeners and ensure AppsGeyser WebView compatibility */
 
-  function initApp(){
+ function initApp(){
+
   ['sig-uttp','sig-bdkt','sig-potensi'].forEach(id=>enableSignature(id))
 
-  const u = document.getElementById('uttpForm'); 
+  const u = document.getElementById('uttpForm')
   if(u) u.addEventListener('submit', e=>{ e.preventDefault(); submitReport(u,'UTTP') })
 
-  const b = document.getElementById('bdktForm'); 
+  const b = document.getElementById('bdktForm')
   if(b) b.addEventListener('submit', e=>{ e.preventDefault(); submitReport(b,'BDKT') })
 
-  const p = document.getElementById('potensiForm'); 
+  const p = document.getElementById('potensiForm')
   if(p) p.addEventListener('submit', e=>{ e.preventDefault(); submitReport(p,'POTENSI') })
 
-  const cp = document.getElementById('form-cerapan-pompa'); 
+  const cp = document.getElementById('form-cerapan-pompa')
   if(cp) cp.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(cp,'Pompa BBM') })
 
-  const ct = document.getElementById('form-cerapan-timbangan'); 
+  const ct = document.getElementById('form-cerapan-timbangan')
   if(ct) ct.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(ct,'Timbangan') })
 
-  const cb = document.getElementById('form-cerapan-bdkt'); 
+  const cb = document.getElementById('form-cerapan-bdkt')
   if(cb) cb.addEventListener('submit', e=>{ e.preventDefault(); submitCerapan(cb,'Cerapan BDKT') })
 
   initMap()
 
-  const ov = document.getElementById('overlay'); 
+  const ov = document.getElementById('overlay')
   if(ov) ov.style.display='none'
-}
+   // preload grafik saat pertama buka
+setTimeout(loadGrafikUTTP, 500);
 
- 
-  // ensure overlay hidden
-  const ov = document.getElementById('overlay'); if(ov) ov.style.display='none'
 }
 
 /* ======================================================
@@ -635,7 +634,7 @@ async function submitReport(form, typeKey){
 function submitCerapan(form, jenis){
   const fd = new FormData(form)
   const data = { id: uid('cerapan'), jenis, tanggal: fd.get('tanggal'), nama: fd.get('nama'), petugas: Array.from(form.querySelectorAll('input[name="petugas"]:checked')).map(i=>i.value).join(', '), hasil: fd.get('hasil'), keterangan: fd.get('keterangan'), timestamp: new Date().toISOString() }
-  pushLocal('cerapan', data)
+  console.log('cerapan', data)
   alert('Cerapan tersimpan (lokal)')
   form.reset()
   goHome()
@@ -666,8 +665,10 @@ function addMarker(m){
 function loadMarkers(){
   if(!markersLayer) return
   markersLayer.clearLayers()
-  const mk = getLocal('map_markers'); mk.forEach(m=> addMarker(m))
+ 
 }
+
+
 
 /* quick overlay to add simple marker */
 let overlayLat = null
@@ -684,7 +685,7 @@ function saveOverlayMarker(){
   const jenis = document.getElementById('overlay-type').value || 'BDKT'
   if(!overlayLat){ alert('Lokasi tidak tersedia'); return }
   const m = { id: uid('map'), title:name, note, jenis, lat: overlayLat.lat, lng: overlayLat.lng, ts: new Date().toISOString() }
-  pushLocal('map_markers', m)
+ 
   addMarker(m)
   closeOverlay()
   alert('Marker tersimpan (lokal)')
@@ -693,41 +694,49 @@ function saveOverlayMarker(){
 
 
 <script>
-  let chartUttp = null;
+ let chartUttp = null;
 
 async function loadGrafikUTTP(){
-  const year = document.getElementById("filter-year").value;
+  try{
+    const year = document.getElementById("filter-year").value;
 
-  const res = await fetch(
+    const res = await fetch(
+      APPS_SCRIPT_URL + `?mode=grafik&jenis=UTTP&year=${year}`
+    );
 
-  APPS_SCRIPT_URL + `?mode=grafik&jenis=UTTP&year=${year}`
-  );
-  const data = await res.json();
+    const data = await res.json();
 
-  const ctx = document.getElementById("chartUttp").getContext("2d");
-  if(chartUttp) chartUttp.destroy();
+    const canvas = document.getElementById("chartUttp");
+    if(!canvas) return;
 
-  chartUttp = new Chart(ctx,{
-    type:"bar",
-    data:{
-      labels:["Melanggar","Tidak Melanggar"],
-      datasets:[{
-        label:"Jumlah UTTP",
-        data:[data.melanggar, data.tidak],
-        backgroundColor:["#e74c3c","#2ecc71"]
-      }]
-    },
-    options:{
-      responsive:true,
-      scales:{ y:{ beginAtZero:true } }
-    }
-  });
+    const ctx = canvas.getContext("2d");
+
+    if(chartUttp) chartUttp.destroy();
+
+    chartUttp = new Chart(ctx,{
+      type:"bar",
+      data:{
+        labels:["Melanggar","Tidak Melanggar"],
+        datasets:[{
+          label:"Jumlah UTTP",
+          data:[
+            data.melanggar || 0,
+            data.tidak || 0
+          ],
+          backgroundColor:["#e74c3c","#2ecc71"]
+        }]
+      },
+      options:{
+        responsive:true,
+        scales:{ y:{ beginAtZero:true } }
+      }
+    });
+
+  }catch(err){
+    console.error("Grafik error:", err);
+  }
 }
+  document.addEventListener("DOMContentLoaded", initApp);
 </script>
-  <script>
-     document.addEventListener("DOMContentLoaded", initApp);
-  </script>
-   
-
-</body>
+  </body>
 </html>

@@ -6,6 +6,8 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Aplikasi Pengawasan Kemetrologian</title>
+  
+
 
 <!-- Leaflet -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -401,6 +403,7 @@ canvas.signature{width:100%;height:140px;border:1px solid #ccc;border-radius:6px
   <button onclick="openMenu('grafik')"><i class="fa-solid fa-chart-column"></i>Grafik</button>
 </div>
 
+  
 <script>
 /* ======================================================
    CONFIG - ganti jika perlu
@@ -410,15 +413,9 @@ canvas.signature{width:100%;height:140px;border:1px solid #ccc;border-radius:6px
 const APPS_SCRIPT_URL =
  "https://script.google.com/macros/s/AKfycbw1JKPNXKZ4ief6OQSou2Q-Ye3adGKUR9nDVTlebRqJwnLcQ5OrfafZftUfUCA3S5fO/exec";
 
-/* ======================================================
-   Utilities (localStorage helpers)
-   ====================================================== */
+
 function uid(prefix='id'){ return prefix + '_' + Date.now() + '_' + Math.floor(Math.random()*1000) }
 
-/*function getLocal(key){ try{ const v=localStorage.getItem(key); return v?JSON.parse(v):[] }catch(e){ return [] } }
-function setLocal(key, arr){ localStorage.setItem(key, JSON.stringify(arr)) }
-function pushLocal(key, item){ const a = getLocal(key); a.push(item); setLocal(key,a); return a } */
-  
 
 /* ======================================================
    Navigation helpers
@@ -561,11 +558,7 @@ async function submitReport(form, typeKey){
     if(parts.length===2) data.location = { lat: parseFloat(parts[0]), lng: parseFloat(parts[1]) }
   }
 
-  // save local
-  // ❌ DISABLE localStorage (hindari QuotaExceeded)
-// pushLocal(storageKey, data)
-
- /* pushLocal(storageKey, data)*/
+ 
 
   // map markers
   if(data.location) {
@@ -700,30 +693,54 @@ async function loadGrafikUTTP(){
   try{
     const year = document.getElementById("filter-year").value;
 
-    const res = await fetch(
+    // ===== UTTP =====
+    const resU = await fetch(
       APPS_SCRIPT_URL + `?mode=grafik&jenis=UTTP&year=${year}`
     );
+    const dataU = await resU.json();
 
-    const data = await res.json();
-
-    const canvas = document.getElementById("chartUttp");
-    if(!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-
+    const ctxU = document.getElementById("chartUttp").getContext("2d");
     if(chartUttp) chartUttp.destroy();
 
-    chartUttp = new Chart(ctx,{
+    chartUttp = new Chart(ctxU,{
       type:"bar",
       data:{
         labels:["Melanggar","Tidak Melanggar"],
         datasets:[{
           label:"Jumlah UTTP",
           data:[
-            data.melanggar || 0,
-            data.tidak || 0
+            dataU.melanggar || 0,
+            dataU.tidak || 0
           ],
           backgroundColor:["#e74c3c","#2ecc71"]
+        }]
+      },
+      options:{
+        responsive:true,
+        scales:{ y:{ beginAtZero:true } }
+      }
+    });
+
+    // ===== BDKT =====
+    const resB = await fetch(
+      APPS_SCRIPT_URL + `?mode=grafik&jenis=BDKT&year=${year}`
+    );
+    const dataB = await resB.json();
+
+    const ctxB = document.getElementById("chartBdkt").getContext("2d");
+    if(chartBdkt) chartBdkt.destroy();
+
+    chartBdkt = new Chart(ctxB,{
+      type:"bar",
+      data:{
+        labels:["Melanggar","Tidak Melanggar"],
+        datasets:[{
+          label:"Jumlah BDKT",
+          data:[
+            dataB.melanggar || 0,
+            dataB.tidak || 0
+          ],
+          backgroundColor:["#e67e22","#3498db"]
         }]
       },
       options:{
@@ -736,6 +753,7 @@ async function loadGrafikUTTP(){
     console.error("Grafik error:", err);
   }
 }
+
   document.addEventListener("DOMContentLoaded", initApp);
 </script>
   </body>
